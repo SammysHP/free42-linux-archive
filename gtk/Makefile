@@ -19,6 +19,7 @@ CFLAGS = -MMD \
 	 -Wall \
 	 -Wno-parentheses \
 	 -Wno-write-strings \
+	 -Wno-narrowing \
 	 -g \
 	 -I/usr/X11R6/include \
 	 $(shell pkg-config --cflags gtk+-2.0) \
@@ -40,6 +41,7 @@ LIBS = gcc111libbid.a -lXmu $(shell pkg-config --libs gtk+-2.0)
 ifeq "$(shell uname -s)" "Linux"
 LDFLAGS += -Wl,--hash-style=both
 LIBS += -lpthread
+LIBS := ${LIBS} -lX11
 endif
 
 SRCS = shell_main.cc shell_skin.cc skins.cc keymap.cc shell_loadimage.cc \
