@@ -83,7 +83,8 @@ static const SkinColor *skin_cmap;
 
 static GdkPixbuf *disp_image = NULL;
 
-static char skin_label_buf[1024];
+#define SKIN_LABEL_BUF_SIZE 1024
+static char skin_label_buf[SKIN_LABEL_BUF_SIZE];
 static int skin_label_pos;
 
 static keymap_entry *keymap = NULL;
@@ -115,6 +116,12 @@ static int skin_open(const char *name, int open_layout);
 static int skin_gets(char *buf, int buflen);
 static void skin_close();
 
+#define SKIN_NAMES_LIST_SIZE 100
+static int read_skins_from_dir(const char *dirname, char *skinnames[]);
+static void add_skin_menu_items(const char * const skinnames[], int nskins,
+        GtkWidget *w, GtkMenu *skin_menu,
+        const char * const skinfilter[], int nskinfilter);
+
 
 static void addMenuItem(GtkMenu *menu, const char *name) {
     bool checked = false;
@@ -129,6 +136,8 @@ static void addMenuItem(GtkMenu *menu, const char *name) {
 
     // Apparently, there is no way to retrieve the label from a menu item,
     // so I have to store them and pass them to the callback explicitly.
+    if (skin_label_pos + strlen(name) >= SKIN_LABEL_BUF_SIZE)
+        return; // not enough space in buffer TODO
     char *lbl = skin_label_buf + skin_label_pos;
     strcpy(lbl, name);
     skin_label_pos += strlen(name) + 1;
@@ -175,6 +184,16 @@ static int skin_open(const char *name, int open_layout) {
     snprintf(namebuf, 1024, "%s/%s.%s", free42dirname, name,
                                         open_layout ? "layout" : "gif");
     external_file = fopen(namebuf, "r");
+
+#ifdef SKIN_SYS_DIR
+    // if skin was not found built-in or in home directory, try system-wide
+    if (external_file == NULL) {
+        snprintf(namebuf, 1024, "%s/%s.%s", SKIN_SYS_DIR, name,
+                                            open_layout ? "layout" : "gif");
+        external_file = fopen(namebuf, "r");
+    }
+#endif
+
     return external_file != NULL;
 }
 
@@ -220,9 +239,67 @@ static int case_insens_comparator(const void *a, const void *b) {
     return strcasecmp(*(const char **) a, *(const char **) b);
 }
 
-void skin_menu_update(GtkWidget *w) {
-    int i, j;
+static int read_skins_from_dir(const char *dirname, char *skinnames[]) {
+    DIR *dir = opendir(dirname);
+    if (dir == NULL)
+        return 0;
 
+    struct dirent *dent;
+    int nskins = 0;
+    while ((dent = readdir(dir)) != NULL && nskins < SKIN_NAMES_LIST_SIZE) {
+        int namelen = strlen(dent->d_name);
+        char *skn;
+        if (namelen < 7)
+            continue;
+        if (strcmp(dent->d_name + namelen - 7, ".layout") != 0)
+            continue;
+        skn = (char *) malloc(namelen - 6);
+        // TODO - handle memory allocation failure
+        memcpy(skn, dent->d_name, namelen - 7);
+        skn[namelen - 7] = 0;
+        skinnames[nskins++] = skn;
+    }
+    closedir(dir);
+
+    qsort(skinnames, nskins, sizeof(char *), case_insens_comparator);
+
+    return nskins;
+}
+
+static void add_skin_menu_items(const char * const skinnames[], int nskins,
+        GtkWidget *w, GtkMenu *skin_menu,
+        const char * const skinfilter[], int nskinfilter) {
+    int i, j;
+    bool have_separator = false;
+
+    for (i = 0; i < nskins; i++) {
+        // filter out built-in skins
+        for (j = 0; j < skin_count; j++)
+            if (strcmp(skinnames[i], skin_name[j]) == 0)
+                goto skip;
+
+        // filter out skins from filter list (e.g. skins in home directory)
+        for (j = 0; j < nskinfilter; j++)
+            if (strcmp(skinnames[i], skinfilter[j]) == 0)
+                goto skip;
+
+        // add separator if first skin in this set
+        if (!have_separator) {
+            GtkWidget *w = gtk_separator_menu_item_new();
+            gtk_menu_shell_append(GTK_MENU_SHELL(skin_menu), w);
+            gtk_widget_show(w);
+            have_separator = true;
+        }
+
+        addMenuItem(skin_menu, skinnames[i]);
+skip:;
+    }
+}
+
+void skin_menu_update(GtkWidget *w) {
+    int i;
+
+    // clear menu
     GtkMenu *skin_menu = (GtkMenu *) gtk_menu_item_get_submenu(GTK_MENU_ITEM(w));
     GList *children = gtk_container_get_children(GTK_CONTAINER(skin_menu));
     GList *item = children;
@@ -234,47 +311,33 @@ void skin_menu_update(GtkWidget *w) {
 
     skin_label_pos = 0;
 
+    // add built-in skins
     for (i = 0; i < skin_count; i++)
         addMenuItem(skin_menu, skin_name[i]);
 
-    DIR *dir = opendir(free42dirname);
-    if (dir == NULL)
-        return;
+    // read skins from home directory
+    char *skins_home[SKIN_NAMES_LIST_SIZE];
+    int n_skins_home = read_skins_from_dir(free42dirname, skins_home);
 
-    struct dirent *dent;
-    char *skinname[100];
-    int nskins = 0;
-    while ((dent = readdir(dir)) != NULL && nskins < 100) {
-        int namelen = strlen(dent->d_name);
-        char *skn;
-        if (namelen < 7)
-            continue;
-        if (strcmp(dent->d_name + namelen - 7, ".layout") != 0)
-            continue;
-        skn = (char *) malloc(namelen - 6);
-        // TODO - handle memory allocation failure
-        memcpy(skn, dent->d_name, namelen - 7);
-        skn[namelen - 7] = 0;
-        skinname[nskins++] = skn;
-    }
-    closedir(dir);
+#ifdef SKIN_SYS_DIR
+    // read skins from system directory
+    char *skins_sys[SKIN_NAMES_LIST_SIZE];
+    int n_skins_sys = read_skins_from_dir(SKIN_SYS_DIR, skins_sys);
 
-    qsort(skinname, nskins, sizeof(char *), case_insens_comparator);
-    bool have_separator = false;
-    for (i = 0; i < nskins; i++) {
-        for (j = 0; j < skin_count; j++)
-            if (strcmp(skinname[i], skin_name[j]) == 0)
-                goto skip;
-        if (!have_separator) {
-            GtkWidget *w = gtk_separator_menu_item_new();
-            gtk_menu_shell_append(GTK_MENU_SHELL(skin_menu), w);
-            gtk_widget_show(w);
-            have_separator = true;
-        }
-        addMenuItem(skin_menu, skinname[i]);
-        skip:
-        free(skinname[i]);
-    }
+    // add system-wide skins
+    add_skin_menu_items(skins_sys, n_skins_sys, w, skin_menu, skins_home, n_skins_home);
+#endif
+
+    // add home directory skins
+    add_skin_menu_items(skins_home, n_skins_home, w, skin_menu, NULL, 0);
+
+    // free memory
+    for (i = 0; i < n_skins_home; i++)
+        free(skins_home[i]);
+#ifdef SKIN_SYS_DIR
+    for (i = 0; i < n_skins_sys; i++)
+        free(skins_sys[i]);
+#endif
 }
 
 void skin_load(int *width, int *height) {

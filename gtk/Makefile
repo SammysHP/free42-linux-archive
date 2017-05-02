@@ -84,6 +84,10 @@ SRCS += audio_alsa.cc
 OBJS += audio_alsa.o
 endif
 
+ifdef SKIN_SYS_DIR
+CXXFLAGS += -DSKIN_SYS_DIR=\"$(SKIN_SYS_DIR)\"
+endif
+
 $(EXE): $(OBJS)
 	$(CXX) -o $(EXE) $(LDFLAGS) $(OBJS) $(LIBS)
 
