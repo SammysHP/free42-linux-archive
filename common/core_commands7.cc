@@ -155,7 +155,7 @@ static int date2comps(phloat x, int4 *yy, int4 *mm, int4 *dd) {
     int4 y = r % 10000;
 #endif
 
-    if (mode_time_dmy) {
+    if (flags.f.dmy) {
         int4 t = m;
         m = d;
         d = t;
@@ -178,7 +178,7 @@ static int date2comps(phloat x, int4 *yy, int4 *mm, int4 *dd) {
 }
 
 static phloat comps2date(int4 y, int4 m, int4 d) {
-    if (mode_time_dmy) {
+    if (flags.f.dmy) {
         int4 t = m;
         m = d;
         d = t;
@@ -228,11 +228,19 @@ int docmd_adate(arg_struct *arg) {
         x = -x;
     if (x >= 100)
         return ERR_INVALID_DATA;
-    int m = to_int(floor(x));
-    int4 dy = to_int4(floor((x - floor(x)) * 1000000));
-    int d = (int) (dy / 10000);
-    int c = (int) (dy / 100 % 100);
-    int y = (int) (dy % 100);
+
+    int4 m = to_int4(floor(x));
+#ifdef BCD_MATH
+    int4 d = to_int4(floor((x - m) * 100));
+    int4 y = to_int4(x * 1000000) % 10000;
+#else
+    int4 r = (int4) floor((x - m) * 100000000 + 0.5);
+    r /= 100;
+    int4 d = r / 10000;
+    int4 y = r % 10000;
+#endif
+    int c = y / 100;
+    y %= 100;
 
     int digits;
     if (flags.f.fix_or_all && flags.f.eng_or_all)
@@ -255,12 +263,12 @@ int docmd_adate(arg_struct *arg) {
         char2buf(buf, 10, &bufptr, '0');
     bufptr += int2string(m, buf + bufptr, 10 - bufptr);
     if (digits > 0) {
-        char2buf(buf, 10, &bufptr, mode_time_dmy ? '.' : '/');
+        char2buf(buf, 10, &bufptr, flags.f.dmy ? '.' : '/');
         if (d < 10)
             char2buf(buf, 10, &bufptr, '0');
         bufptr += int2string(d, buf + bufptr, 10 - bufptr);
         if (digits > 2) {
-            char2buf(buf, 10, &bufptr, mode_time_dmy ? '.' : '/');
+            char2buf(buf, 10, &bufptr, flags.f.dmy ? '.' : '/');
             if (digits > 4) {
                 if (c < 10)
                     char2buf(buf, 10, &bufptr, '0');
@@ -396,7 +404,7 @@ int docmd_date(arg_struct *arg) {
     int y = date / 10000;
     int m = date / 100 % 100;
     int d = date % 100;
-    if (mode_time_dmy)
+    if (flags.f.dmy)
         date = y + m * 10000L + d * 1000000;
     else
         date = y + m * 1000000 + d * 10000L;
@@ -416,16 +424,16 @@ int docmd_date(arg_struct *arg) {
          */
         char buf[22];
         int bufptr = 0;
-        int n = mode_time_dmy ? d : m;
+        int n = flags.f.dmy ? d : m;
         if (n < 10)
             char2buf(buf, 22, &bufptr, '0');
         bufptr += int2string(n, buf + bufptr, 22 - bufptr);
-        char2buf(buf, 22, &bufptr, mode_time_dmy ? '.' : '/');
-        n = mode_time_dmy ? m : d;
+        char2buf(buf, 22, &bufptr, flags.f.dmy ? '.' : '/');
+        n = flags.f.dmy ? m : d;
         if (n < 10)
             char2buf(buf, 22, &bufptr, '0');
         bufptr += int2string(n, buf + bufptr, 22 - bufptr);
-        char2buf(buf, 22, &bufptr, mode_time_dmy ? '.' : '/');
+        char2buf(buf, 22, &bufptr, flags.f.dmy ? '.' : '/');
         bufptr += int2string(y, buf + bufptr, 22 - bufptr);
         char2buf(buf, 22, &bufptr, ' ');
         string2buf(buf, 22, &bufptr, weekdaynames + weekday * 3, 3);
@@ -524,7 +532,7 @@ int docmd_ddays(arg_struct *arg) {
 int docmd_dmy(arg_struct *arg) {
     if (!core_settings.enable_ext_time)
         return ERR_NONEXISTENT;
-    mode_time_dmy = true;
+    flags.f.dmy = true;
     return ERR_NONE;
 }
 
@@ -569,7 +577,7 @@ int docmd_dow(arg_struct *arg) {
 int docmd_mdy(arg_struct *arg) {
     if (!core_settings.enable_ext_time)
         return ERR_NONEXISTENT;
-    mode_time_dmy = false;
+    flags.f.dmy = false;
     return ERR_NONE;
 }
 
