@@ -1,6 +1,6 @@
 /*****************************************************************************
  * Free42 -- an HP-42S calculator simulator
- * Copyright (C) 2004-2016  Thomas Okken
+ * Copyright (C) 2004-2017  Thomas Okken
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2,
@@ -623,7 +623,7 @@ int docmd_dim(arg_struct *arg) {
         y = -y;
     if (y >= 2147483648.0)
         return ERR_INSUFFICIENT_MEMORY;
-    return dimension_array(arg->val.text, arg->length, to_int(y), to_int(x));
+    return dimension_array(arg->val.text, arg->length, to_int(y), to_int(x), true);
 }
 
 int docmd_dot(arg_struct *arg) {

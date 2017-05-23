@@ -1,6 +1,6 @@
 /*****************************************************************************
  * Free42 -- an HP-42S calculator simulator
- * Copyright (C) 2004-2016  Thomas Okken
+ * Copyright (C) 2004-2017  Thomas Okken
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2,
@@ -2252,6 +2252,7 @@ void do_interactive(int command) {
         return;
     } else if (command == CMD_CLALLa) {
         mode_clall = true;
+        set_menu(MENULEVEL_ALPHA, MENU_NONE);
         redisplay();
         return;
     } else if (command == CMD_CLV || command == CMD_PRV) {
@@ -2664,6 +2665,7 @@ void finish_xeq() {
 
     if (cmd == CMD_CLALLa) {
         mode_clall = true;
+        set_menu(MENULEVEL_ALPHA, MENU_NONE);
         mode_command_entry = false;
         pending_command = CMD_NONE;
         redisplay();
