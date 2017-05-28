@@ -1,9 +1,14 @@
 Android version:
+* Implement ON / flag 44.
 * With some combinations of skins and screens, there are glitches in the
   display -- thin black lines, things being slightly out of alignment.
-* Implement ON / flag 44.
+* Free42 should create /sdcard/Android/data/com.thomasokken.free42/ itself, if
+  it doesn't already exist (and use it as the default directory for
+  import/export and print-to-file). It can do that, apparently, since I've been
+  able to do it using MkDir in Free42's file selection dialog.
 
 iPhone version:
+* Implement ON / flag 44.
 * With some combinations of skins and screens, there are glitches in the
   display -- thin black lines, things being slightly out of alignment.
 * Preferences looks a bit ugly in iOS 7 and later, because the now-much-smaller
@@ -12,7 +17,6 @@ iPhone version:
 * Add option to disable key click.
 * Haptic feedback option.
 * Support landscape mode.
-* Implement ON / flag 44.
 
 Windows version:
 * Press a key with the mouse, then move the mouse outside of the window, then
@@ -29,21 +33,24 @@ Mac version:
   extensions to file names automagically when appropriate.
 * Implement low-battery checker.
 
-MacDashboard version:
-* Is it possible to call core_copy() only when the user actually presses Cmd-C,
-  and not every time shell_blitter() is called? The old logic was fine when all
-  Free42 would copy were scalars from the X register, but now that matrices and
-  programs can be copied, that approach really should go.
-
 Linux version:
 * Update low-battery checker to work with /proc/acpi/battery and
   /sys/class/power_supply.
 
 All versions:
-* Copy and paste should respect flag 28 *and* the host's locale.
-* Add setting for "always copy full precision" vs. "copy full precision only in
-  ALL mode" (scalars only).
+* When a two-line message is active, CATALOG doesn't seem to do anything,
+  because the display isn't repainted. (Probably not specific to two-line
+  messages?)
+* Add a feature for previewing and installing skins from the web.
+* Program pasting should accept listings without line numbers.
+* Change scalar copy so it only copies full precision in ALL mode.
 * Add a feature for importing and exporting variables from and to CSV files.
 * Add a feature for importing and exporting programs from and to text files.
-* Add a feature for previewing and installing skins from the web.
-* Add link to 42s.pdf in the About box.
+* Maybe program pasting should be case-insensitive (except for local labels and
+  ALPHA strings, of course)
+* Printer emulation: some aspects of TRACE (and probably also NORM) mode
+  behavior don't match the original. Two specific cases: the original prints
+  feedback when you enter or exit menus ("BASE", "A..F", "EXIT") though not
+  always (PRGM mode?); DIM? prints the value returned in X, while Free42 prints
+  nothing. I'm sure there are more cases, and I should just check them with
+  Emu42 with the HP-82240B emulator.

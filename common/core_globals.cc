@@ -1135,8 +1135,6 @@ static bool persist_globals() {
         goto done;
     if (!persist_vartype(reg_lastx))
         goto done;
-    if (!write_bool(false))  /* No, big stack block does not exist */
-        goto done;    
     if (!write_int(reg_alpha_length))
         goto done;
     if (!shell_write_saved_state(reg_alpha, 44))
@@ -1233,7 +1231,7 @@ static bool unpersist_globals(int4 ver) {
     if (!unpersist_vartype(&reg_lastx, padded))
         goto done;
 
-    if (ver >= 12) {
+    if (ver >= 12 && ver < 20) {
         /* BIGSTACK -- obsolete */
         bool bigstack;
         if (!read_bool(&bigstack))
@@ -2281,10 +2279,9 @@ bool load_state(int4 ver) {
             if (!read_int(&dummy)) return false;
         }
     }
-    if (ver < 5)
-        core_settings.raw_text = false;
-    else {
-        if (!read_bool(&core_settings.raw_text)) return false;
+    if (ver >= 5 && ver < 20) {
+        bool bdummy;
+        if (!read_bool(&bdummy)) return false;
         if (ver < 8) {
             int dummy;
             if (!read_int(&dummy)) return false;
@@ -2295,8 +2292,6 @@ bool load_state(int4 ver) {
     else
         if (!read_bool(&core_settings.auto_repeat)) return false;
     if (ver < 15) {
-        core_settings.enable_ext_copan = false;
-        core_settings.enable_ext_bigstack = false;
         #if defined(ANDROID) || defined(IPHONE)
             core_settings.enable_ext_accel = true;
             core_settings.enable_ext_locat = true;
@@ -2308,8 +2303,11 @@ bool load_state(int4 ver) {
         #endif
         core_settings.enable_ext_time = true;
     } else {
-        if (!read_bool(&core_settings.enable_ext_copan)) return false;
-        if (!read_bool(&core_settings.enable_ext_bigstack)) return false;
+        if (ver < 20) {
+            bool dummy;
+            if (!read_bool(&dummy)) return false;
+            if (!read_bool(&dummy)) return false;
+        }
         if (!read_bool(&core_settings.enable_ext_accel)) return false;
         if (!read_bool(&core_settings.enable_ext_locat)) return false;
         if (!read_bool(&core_settings.enable_ext_heading)) return false;
@@ -2459,10 +2457,7 @@ void save_state() {
     #endif
     if (!write_bool(core_settings.matrix_singularmatrix)) return;
     if (!write_bool(core_settings.matrix_outofrange)) return;
-    if (!write_bool(core_settings.raw_text)) return;
     if (!write_bool(core_settings.auto_repeat)) return;
-    if (!write_bool(core_settings.enable_ext_copan)) return;
-    if (!write_bool(core_settings.enable_ext_bigstack)) return;
     if (!write_bool(core_settings.enable_ext_accel)) return;
     if (!write_bool(core_settings.enable_ext_locat)) return;
     if (!write_bool(core_settings.enable_ext_heading)) return;
@@ -2594,7 +2589,7 @@ void hard_reset(int bad_state_file) {
     flags.f.trace_print = 0;
     flags.f.normal_print = 0;
     flags.f.f17 = flags.f.f18 = flags.f.f19 = flags.f.f20 = 0;
-    flags.f.printer_enable = 1; // HP-42S sets this to 0 on hard reset
+    flags.f.printer_enable = 0;
     flags.f.numeric_data_input = 0;
     flags.f.alpha_data_input = 0;
     flags.f.range_error_ignore = 0;
@@ -2627,7 +2622,7 @@ void hard_reset(int bad_state_file) {
     flags.f.prgm_mode = 0;
     /* flags.f.VIRTUAL_input = 0; */
     flags.f.f54 = 0;
-    flags.f.printer_exists = 1; // HP-42S sets this to 0 on hard reset
+    flags.f.printer_exists = 0;
     flags.f.lin_fit = 1;
     flags.f.log_fit = 0;
     flags.f.exp_fit = 0;
@@ -2679,8 +2674,6 @@ void hard_reset(int bad_state_file) {
     mode_time_clk24 = false;
 
     core_settings.auto_repeat = true;
-    core_settings.enable_ext_copan = false;
-    core_settings.enable_ext_bigstack = false;
     #if defined(ANDROID) || defined(IPHONE)
         core_settings.enable_ext_accel = true;
         core_settings.enable_ext_locat = true;
