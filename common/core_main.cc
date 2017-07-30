@@ -1551,6 +1551,19 @@ static int getbyte(char *buf, int *bufptr, int *buflen, int maxlen) {
 
 static phloat parse_number_line(char *buf) {
     phloat res;
+    if (buf[0] == 'E' || buf[0] == '-' && buf[1] == 'E') {
+        char *buf2 = (char *) malloc(strlen(buf) + 2);
+        strcpy(buf2 + 1, buf);
+        if (buf[0] == 'E') {
+            buf2[0] = '1';
+        } else {
+            buf2[0] = '-';
+            buf2[1] = '1';
+        }
+        res = parse_number_line(buf2);
+        free(buf2);
+        return res;
+    }
 #ifdef BCD_MATH
     res = Phloat(buf);
     int s = p_isinf(res);
@@ -3597,17 +3610,22 @@ static synonym_spec hp41_synonyms[] =
     { "P-R",    3, CMD_TO_REC  },
     { "R-D",    3, CMD_TO_DEG  },
     { "RDN",    3, CMD_RDN     },
+    { "Rv",     2, CMD_RDN     }, // (*)
     { "R-P",    3, CMD_TO_POL  },
     { "ST+",    3, CMD_STO_ADD },
     { "ST/",    3, CMD_STO_DIV },
-    { "STO/",   4, CMD_STO_DIV },
+    { "STO/",   4, CMD_STO_DIV }, // (*)
     { "ST*",    3, CMD_STO_MUL },
-    { "STO*",   4, CMD_STO_MUL },
+    { "STO*",   4, CMD_STO_MUL }, // (*)
     { "ST-",    3, CMD_STO_SUB },
     { "X<=0?",  5, CMD_X_LE_0  },
     { "X<=Y?",  5, CMD_X_LE_Y  },
+    { "v",      1, CMD_DOWN    }, // (*)
     { "",       0, CMD_NONE    }
 };
+
+// (*) These synonyms are not recognized on the HP-42S, but were added to
+//     Free42 because they're needed for parsing program listings.
 
 int find_builtin(const char *name, int namelen) {
     int i, j;
