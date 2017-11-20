@@ -1,3 +1,21 @@
+2017-11-19: release 2.0.7
+
+* Changed the RAN and SEED functions to match the behavior of the real HP-42S.
+  The previous implementation used the algorithm from the HP-41C Standard Pac,
+  which produced numbers with only 6 significant digits.
+* The up/down annunciator (multi-row menu) did not get updated correctly when
+  VARMENU was activated, including in the solver and integrator. Fixed.
+* Windows version: restored the Calculator key mapping option, which I had
+  removed in 1.5.14. It turns out that keyboards with a dedicated Calculator
+  key do still exist.
+* Android version: the menu icons for Copy, Paste, and Print-Out were displayed
+  too large, overlapping the menu item labels on some devices. Fixed.
+* Windows, Linux, and Mac versions: added keyboard mappings g => GTO and
+  p => PI. On existing installations, users must delete or rename the existing
+  keymap and restart for this to take effect.
+* iOS version: painting the display could be glitchy if either or both of its
+  coordinates were odd. Fixed by forcing them to be even.
+
 2017-08-12: release 2.0.6
 
 * Decimal version: fixed ISG and DSE for values >= 2^63 (9.2e18).
