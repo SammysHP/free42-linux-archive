@@ -1,6 +1,6 @@
 /*****************************************************************************
  * Free42 -- an HP-42S calculator simulator
- * Copyright (C) 2004-2017  Thomas Okken
+ * Copyright (C) 2004-2018  Thomas Okken
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2,
@@ -2774,13 +2774,47 @@ static void paste_programs(const char *buf) {
         hppos = 0;
         while (hpbuf[hppos] == ' ')
             hppos++;
-        int prev_hppos;
+        int prev_hppos, lineno_start, lineno_end;
         prev_hppos = hppos;
+        lineno_start = -1;
         while (hppos < hpend && (c = hpbuf[hppos], c >= '0' && c <= '9'))
             hppos++;
-        if (prev_hppos == hppos)
-            // No line number? Not acceptable.
-            goto line_done;
+        if (prev_hppos != hppos) {
+            // Number found. If this is immediately followed by a period,
+            // comma, or E, it's not a line number but an unnumbered number
+            // line.
+            if (hppos < hpend && (c = hpbuf[hppos], c == '.' || c == ','
+                            || c == 'E' || c == 'e' || c == 24)) {
+                char numbuf[50];
+                int len = hpend - prev_hppos;
+                if (len > 50)
+                    len = 50;
+                int i;
+                for (i = 0; i < len; i++) {
+                    c = hpbuf[prev_hppos + i];
+                    if (c == ' ')
+                        break;
+                    if (c == 'e' || c == 24)
+                        c = 'E';
+                    else if (c == ',')
+                        c = '.';
+                    numbuf[i] = c;
+                }
+                if (i == 50)
+                    // Too long
+                    goto line_done;
+                numbuf[i] = 0;
+                cmd = CMD_NUMBER;
+                arg.val_d = parse_number_line(numbuf);
+                arg.type = ARGTYPE_DOUBLE;
+                goto store;
+            } else {
+                // No decimal or exponent following the digits;
+                // for now, assume it's a line number.
+                lineno_start = prev_hppos;
+                lineno_end = hppos;
+            }
+        }
         // Line number should be followed by a run of one or more characters,
         // which may be spaces, greater-than signs, or solid right-pointing
         // triangle (a.k.a. goose), but all but one of those characters must
@@ -2799,13 +2833,28 @@ static void paste_programs(const char *buf) {
                 break;
             hppos++;
         }
-        if (hppos == prev_hppos)
-            // No space following line number? Not acceptable.
-            goto line_done;
         // Now hppos should be pointing at the first character of the
         // command.
-        if (hppos == hpend)
-            // Nothing after the line number
+        if (hppos == hpend) {
+            if (lineno_start == -1) {
+                // empty line
+                goto line_done;
+            } else {
+                // Nothing after the line number; treat this as a
+                // number without a line number
+                // Note that we could treat many more cases as unnumbered
+                // numbers; basically, any number followed by something that
+                // doesn't parse... but I'm not opening that can of worms until
+                // I see a good reason to.
+                hpbuf[lineno_end] = 0;
+                cmd = CMD_NUMBER;
+                arg.val_d = parse_number_line(hpbuf + lineno_start);
+                arg.type = ARGTYPE_DOUBLE;
+                goto store;
+            }
+        }
+        if (lineno_start != -1 && hppos == prev_hppos)
+            // No space following line number? Not acceptable.
             goto line_done;
         if (hppos < hpend - 1 && hpbuf[hppos] == 127 && hpbuf[hppos + 1] == '"') {
             // Appended string

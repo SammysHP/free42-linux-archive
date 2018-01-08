@@ -1,6 +1,6 @@
 /*****************************************************************************
  * Free42 -- an HP-42S calculator simulator
- * Copyright (C) 2004-2017  Thomas Okken
+ * Copyright (C) 2004-2018  Thomas Okken
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2,
@@ -361,11 +361,9 @@ int docmd_cross(arg_struct *arg) {
 }
 
 int docmd_custom(arg_struct *arg) {
-    if (mode_plainmenu == MENU_CUSTOM1
-            || mode_plainmenu == MENU_CUSTOM2
-            || mode_plainmenu == MENU_CUSTOM3)
-        set_menu(MENULEVEL_PLAIN, MENU_NONE);
-    else
+    if (mode_plainmenu != MENU_CUSTOM1
+            && mode_plainmenu != MENU_CUSTOM2
+            && mode_plainmenu != MENU_CUSTOM3)
         set_menu(MENULEVEL_PLAIN, MENU_CUSTOM1);
     return ERR_NONE;
 }
@@ -894,6 +892,8 @@ int docmd_edit(arg_struct *arg) {
             matedit_prev_appmenu = MENU_NONE;
         set_menu(MENULEVEL_APP, MENU_MATRIX_EDIT1);
         set_appmenu_exitcallback(1);
+        if (flags.f.trace_print && flags.f.printer_exists)
+            docmd_prx(NULL);
         return ERR_NONE;
     } else
         return ERR_INVALID_TYPE;
@@ -956,6 +956,8 @@ int docmd_editn(arg_struct *arg) {
             matedit_prev_appmenu = MENU_NONE;
         set_menu(MENULEVEL_APP, MENU_MATRIX_EDIT1);
         set_appmenu_exitcallback(1);
+        if (flags.f.trace_print && flags.f.printer_exists)
+            docmd_prx(NULL);
         return ERR_NONE;
     }
 }

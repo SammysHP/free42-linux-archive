@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Free42 -- an HP-42S calculator simulator
-// Copyright (C) 2004-2017  Thomas Okken
+// Copyright (C) 2004-2018  Thomas Okken
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2,
@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <dirent.h>
 #include <unistd.h>
 
 #include "shell.h"
@@ -127,6 +128,7 @@ static int ann_run = 0;
 static int ann_battery = 0;
 static int ann_g = 0;
 static int ann_rad = 0;
+static guint ann_print_timeout_id = 0;
 
 
 /* Private functions */
@@ -576,6 +578,14 @@ int main(int argc, char *argv[]) {
         fclose(apm);
         shell_low_battery();
         g_timeout_add(60000, battery_checker, NULL);
+    } else {
+        /* Check if /sys/class/power_supply exists */
+        DIR *d = opendir("/sys/class/power_supply");
+        if (d != NULL) {
+            closedir(d);
+            shell_low_battery();
+            g_timeout_add(60000, battery_checker, NULL);
+        }
     }
 
     if (pipe(pype) != 0)
@@ -1461,7 +1471,7 @@ static void aboutCB() {
         GtkWidget *version = gtk_label_new("Free42 " VERSION);
         gtk_misc_set_alignment(GTK_MISC(version), 0, 0);
         gtk_box_pack_start(GTK_BOX(box2), version, FALSE, FALSE, 10);
-        GtkWidget *author = gtk_label_new("(C) 2004-2017 Thomas Okken");
+        GtkWidget *author = gtk_label_new("(C) 2004-2018 Thomas Okken");
         gtk_misc_set_alignment(GTK_MISC(author), 0, 0);
         gtk_box_pack_start(GTK_BOX(box2), author, FALSE, FALSE, 0);
         GtkWidget *websitelink = gtk_link_button_new("http://thomasokken.com/free42/");
@@ -1934,6 +1944,13 @@ void shell_beeper(int frequency, int duration) {
 #endif
 }
 
+static gboolean ann_print_timeout(gpointer cd) {
+    ann_print_timeout_id = 0;
+    ann_print = 0;
+    skin_repaint_annunciator(3, ann_print);
+    return FALSE;
+}
+
 void shell_annunciators(int updn, int shf, int prt, int run, int g, int rad) {
     if (updn != -1 && ann_updown != updn) {
         ann_updown = updn;
@@ -1943,9 +1960,18 @@ void shell_annunciators(int updn, int shf, int prt, int run, int g, int rad) {
         ann_shift = shf;
         skin_repaint_annunciator(2, ann_shift);
     }
-    if (prt != -1 && ann_print != prt) {
-        ann_print = prt;
-        skin_repaint_annunciator(3, ann_print);
+    if (prt != -1) {
+        if (ann_print_timeout_id != 0) {
+            g_source_remove(ann_print_timeout_id);
+            ann_print_timeout_id = 0;
+        }
+        if (ann_print != prt)
+            if (prt) {
+                ann_print = 1;
+                skin_repaint_annunciator(3, ann_print);
+            } else {
+                ann_print_timeout_id = g_timeout_add(1000, ann_print_timeout, NULL);
+            }
     }
     if (run != -1 && ann_run != run) {
         ann_run = run;
@@ -2025,28 +2051,65 @@ uint4 shell_get_mem() {
 
 int shell_low_battery() {
          
-    /* /proc/apm partial legend:
-     * 
-     * 1.16 1.2 0x03 0x01 0x03 0x09 9% -1 ?
-     *               ^^^^ ^^^^
-     *                 |    +-- Battery status (0 = full, 1 = low,
-     *                 |                        2 = critical, 3 = charging)
-     *                 +------- AC status (0 = offline, 1 = online)
-     */
-
-    FILE *apm = fopen("/proc/apm", "r");
-    char line[1024];
     int lowbat = 0;
-    int ac_stat, bat_stat;
-    if (apm == NULL)
-        goto done2;
-    if (fgets(line, 1024, apm) == NULL)
-        goto done1;
-    if (sscanf(line, "%*s %*s %*s %x %x", &ac_stat, &bat_stat) == 2)
-        lowbat = ac_stat != 1 && (bat_stat == 1 || bat_stat == 2);
-    done1:
-    fclose(apm);
-    done2:
+    FILE *apm = fopen("/proc/apm", "r");
+    if (apm != NULL) {
+        /* /proc/apm partial legend:
+         * 
+         * 1.16 1.2 0x03 0x01 0x03 0x09 9% -1 ?
+         *               ^^^^ ^^^^
+         *                 |    +-- Battery status (0 = full, 1 = low,
+         *                 |                        2 = critical, 3 = charging)
+         *                 +------- AC status (0 = offline, 1 = online)
+         */
+        char line[1024];
+        int ac_stat, bat_stat;
+        if (fgets(line, 1024, apm) == NULL)
+            goto done1;
+        if (sscanf(line, "%*s %*s %*s %x %x", &ac_stat, &bat_stat) == 2)
+            lowbat = ac_stat != 1 && (bat_stat == 1 || bat_stat == 2);
+        done1:
+        fclose(apm);
+    } else {
+        /* Battery considered low if
+         *
+         *   /sys/class/power_supply/BATn/status == "Discharging"
+         *   and
+         *   /sys/class/power_supply/BATn/capacity <= 10
+         *
+         * Assuming status will always be "Discharging" when the system is
+         * actually running on battery (it could also be "Full", but then it is
+         * definitely now low!), and that capacity is a number between 0 and
+         * 100. The choice of 10% or less as being "low" is completely
+         * arbitrary.
+         * Checking BATn where n = 0, 1, or 2. Some docs suggest BAT0 should
+         * exist, others suggest 1 should exist; I'm playing safe and trying
+         * both, and throwing in BAT2 just for the fun of it.
+         */
+        char status_filename[50];
+        char capacity_filename[50];
+        char line[50];
+        for (int n = 0; n <= 2; n++) {
+            sprintf(status_filename, "/sys/class/power_supply/BAT%d/status", n);
+            FILE *status_file = fopen(status_filename, "r");
+            if (status_file == NULL)
+                continue;
+            sprintf(capacity_filename, "/sys/class/power_supply/BAT%d/capacity", n);
+            FILE *capacity_file = fopen(capacity_filename, "r");
+            if (capacity_file == NULL) {
+                fclose(status_file);
+                continue;
+            }
+            bool discharging = fgets(line, 50, status_file) != NULL && strncasecmp(line, "discharging", 11) == 0;
+            int capacity;
+            if (fscanf(capacity_file, "%d", &capacity) != 1)
+                capacity = 100;
+            fclose(status_file);
+            fclose(capacity_file);
+            lowbat = discharging && capacity <= 10;
+            break;
+        }
+    }
     if (lowbat != ann_battery) {
         ann_battery = lowbat;
         if (allow_paint)
