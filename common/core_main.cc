@@ -97,7 +97,6 @@ void core_quit() {
     if (mode_interruptible != NULL)
         stop_interruptible();
     save_state();
-#endif
     free_vartype(reg_x);
     free_vartype(reg_y);
     free_vartype(reg_z);
@@ -108,10 +107,11 @@ void core_quit() {
     if (vars != NULL)
         free(vars);
     clean_vartype_pools();
-
-#ifdef ANDROID
-    reinitialize_globals();
 #endif
+//
+//#ifdef ANDROID
+//    reinitialize_globals();
+//#endif
 }
 
 void core_repaint_display() {
@@ -507,38 +507,6 @@ int core_keyup() {
     return (mode_running && !mode_getkey && !mode_pause) || keybuf_head != keybuf_tail;
 }
 
-int core_allows_powerdown(int *want_cpu) {
-    int allow = shell_low_battery() || !(mode_running || mode_getkey
-                    || flags.f.continuous_on || mode_interruptible != NULL);
-    *want_cpu = 0;
-    if (!allow && mode_getkey) {
-        /* We're being asked to power down but we're refusing.
-         * If this happens in the middle of a GETKEY, it should return 70,
-         * the code for OFF, but without stopping program execution.
-         */
-        vartype *seventy = new_real(70);
-        if (seventy != NULL) {
-            recall_result(seventy);
-            flags.f.stack_lift_disable = 0;
-            if (mode_running) {
-                shell_annunciators(-1, -1, -1, 1, -1, -1);
-                *want_cpu = 1;
-            } else
-                redisplay();
-        } else {
-            /* Memory allocation failure... The program will stop now,
-             * anyway, so we change our mind and allow the powerdown.
-             */
-            display_error(ERR_INSUFFICIENT_MEMORY, 1);
-            set_running(false);
-            redisplay();
-            allow = 1;
-        }
-        mode_getkey = 0;
-    }
-    return allow;
-}
-
 int core_powercycle() {
     bool need_redisplay = false;
 
@@ -549,7 +517,9 @@ int core_powercycle() {
 
     keybuf_tail = keybuf_head;
     set_shift(false);
-    flags.f.continuous_on = 0;
+    #if (!defined(ANDROID) && !defined(IPHONE))
+    shell_always_on(0);
+    #endif
     pending_command = CMD_NONE;
 
     if (mode_getkey) {
@@ -560,10 +530,6 @@ int core_powercycle() {
          * Since Free42 can be shut down in ways the HP-42S can't (exiting the
          * application, or turning off power on a Palm), I have to fake it a
          * bit; I put 70 in X as if the user had done OFF twice on a real 42S.
-         * Note that, as on a real 42S, we don't allow auto-powerdown while
-         * GETKEY is waiting; if an auto-powerdown request happens during
-         * GETKEY, it returns 70 but program execution is not stopped, and the
-         * power stays on (see core_allows_powerdown(), above).
          */
         vartype *seventy = new_real(70);
         if (seventy != NULL) {
@@ -2168,9 +2134,7 @@ static int scan_number(const char *buf, int len, int pos) {
         char c = buf[p];
         switch (state) {
             case 0:
-                if ((c >= '0' && c <= '9')
-                        || c == '+' || c == '-'
-                        || c == sep)
+                if ((c >= '0' && c <= '9') || c == '+' || c == '-')
                     state = 1;
                 else if (c == dec)
                     state = 2;
@@ -2180,7 +2144,7 @@ static int scan_number(const char *buf, int len, int pos) {
                     return p;
                 break;
             case 1:
-                if ((c >= '0' && c <= '9') || c == sep)
+                if ((c >= '0' && c <= '9') || c == sep || c == ' ')
                     /* state = 1 */;
                 else if (c == dec)
                     state = 2;
@@ -2228,7 +2192,7 @@ static bool parse_phloat(const char *p, int len, phloat *res) {
         char c = p[j++];
         if (c == 0)
             break;
-        if (c == '+')
+        if (c == '+' || c == ' ')
             continue;
         else if (c == 'e' || c == 'E' || c == 24) {
             in_mant = false;
@@ -2898,12 +2862,11 @@ static void paste_programs(const char *buf) {
             if (cmd == CMD_SIZE) {
                 if (!nexttoken(hpbuf, cmd_end, hpend, &tok_start, &tok_end))
                     goto line_done;
-                int len = tok_end - tok_start;
-                if (len > 4)
+                if (tok_end - tok_start > 4)
                     goto line_done;
                 int sz = 0;
-                while (len > 0) {
-                    char c = hpbuf[tok_start + (--len)];
+                for (int i = tok_start; i < tok_end; i++) {
+                    char c = hpbuf[i];
                     if (c < '0' || c > '9')
                         goto line_done;
                     sz = sz * 10 + c - '0';
@@ -3267,8 +3230,11 @@ void core_paste(const char *buf) {
             int len = strlen(buf);
             char *asciibuf = (char *) malloc(len + 1);
             strcpy(asciibuf, buf);
-            if (asciibuf[len - 1] == '\n')
+            if (len > 0 && asciibuf[len - 1] == '\n') {
                 asciibuf[--len] = 0;
+                if (len > 0 && asciibuf[len - 1] == '\r')
+                    asciibuf[--len] = 0;
+            }
             char *hpbuf = (char *) malloc(len + 4);
             len = ascii2hp(hpbuf, asciibuf, len);
             free(asciibuf);
