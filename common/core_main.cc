@@ -649,7 +649,7 @@ char *core_list_programs() {
     return buf;
 }
 
-static int export_hp42s(int index, int (*progress_report)(const char *)) {
+static void export_hp42s(int index) {
     int4 pc = 0;
     int cmd;
     arg_struct arg;
@@ -661,7 +661,6 @@ static int export_hp42s(int index, int (*progress_report)(const char *)) {
     char buf[1000];
     int buflen = 0;
     int i;
-    int cancel = 0;
 
     current_prgm = index;
     do {
@@ -716,16 +715,6 @@ static int export_hp42s(int index, int (*progress_report)(const char *)) {
                         else
                             goto normal;
                     } else if (arg.type == ARGTYPE_STR) {
-                        if (progress_report != NULL) {
-                            char s[52];
-                            int sl = hp2ascii(s + 1, arg.val.text, arg.length);
-                            s[0] = s[sl + 1] = '"';
-                            s[sl + 2] = 0;
-                            if (progress_report(s)) {
-                                cancel = 1;
-                                goto done;
-                            }
-                        }
                         cmdbuf[cmdlen++] = (char) 0xC0;
                         cmdbuf[cmdlen++] = 0x00;
                         cmdbuf[cmdlen++] = 0xF1 + arg.length;
@@ -776,10 +765,6 @@ static int export_hp42s(int index, int (*progress_report)(const char *)) {
                     } else
                         goto normal;
                 } else if (cmd == CMD_END) {
-                    if (progress_report != NULL && progress_report("END")) {
-                        cancel = 1;
-                        goto done;
-                    }
                     cmdbuf[cmdlen++] = (char) 0xC0;
                     cmdbuf[cmdlen++] = 0x00;
                     cmdbuf[cmdlen++] = 0x0D;
@@ -934,7 +919,6 @@ static int export_hp42s(int index, int (*progress_report)(const char *)) {
         shell_write(buf, buflen);
     done:
     current_prgm = saved_prgm;
-    return cancel;
 }
 
 int4 core_program_size(int prgm_index) {
@@ -1053,15 +1037,12 @@ int4 core_program_size(int prgm_index) {
     return size;
 }
 
-int core_export_programs(int count, const int *indexes,
-                          int (*progress_report)(const char *)) {
+void core_export_programs(int count, const int *indexes) {
     int i;
     for (i = 0; i < count; i++) {
         int p = indexes[i];
-        if (export_hp42s(p, progress_report))
-            return 1;
+        export_hp42s(p);
     }
-    return 0;
 }
 
 static int hp42tofree42[] = {
@@ -1539,6 +1520,9 @@ static phloat parse_number_line(char *buf) {
             buf2[0] = '-';
             buf2[1] = '1';
         }
+        int len2 = strlen(buf2);
+        if (buf2[len2 - 1] == 'E')
+            buf2[len2 - 1] = 0;
         res = parse_number_line(buf2);
         free(buf2);
         return res;
@@ -1578,7 +1562,7 @@ static phloat parse_number_line(char *buf) {
     return res;
 }
 
-void core_import_programs(int (*progress_report)(const char *)) {
+void core_import_programs() {
     char buf[1000];
     int i, nread = 0;
     int need_to_rebuild_label_table = 0;
@@ -1591,7 +1575,6 @@ void core_import_programs(int (*progress_report)(const char *)) {
     int assign = 0;
     int at_end = 1;
     int instrcount = -1;
-    int report_label = 0;
 
     set_running(false);
 
@@ -1605,20 +1588,6 @@ void core_import_programs(int (*progress_report)(const char *)) {
 
     while (!done_flag) {
         skip:
-        if (progress_report != NULL) {
-            /* Poll the progress dialog every 100 instructions, in case
-             * we're reading a bogus file: normally, we only update the
-             * dialog when we encounter a GLOBAL, and that should be often
-             * enough when reading legitimate HP-42S programs, but if we're
-             * reading garbage, it may not happen at all, and that would
-             * mean the user would get no chance to intervene.
-             */
-            if (++instrcount == 100) {
-                if (progress_report(NULL))
-                    goto done;
-                instrcount = 0;
-            }
-        }
         byte1 = getbyte(buf, &pos, &nread, 1000);
         if (byte1 == -1)
             goto done;
@@ -1740,8 +1709,6 @@ void core_import_programs(int (*progress_report)(const char *)) {
                     goto done;
                 if (str_len < 0x0F1) {
                     /* END */
-                    if (progress_report != NULL && progress_report("END"))
-                        goto done;
                     at_end = 1;
                     goto skip;
                 } else {
@@ -1752,8 +1719,6 @@ void core_import_programs(int (*progress_report)(const char *)) {
                         goto done;
                     cmd = CMD_LBL;
                     arg.type = ARGTYPE_STR;
-                    if (progress_report != NULL)
-                        report_label = 1;
                     goto do_string;
                 }
             } else if (byte1 >= 0x0D0 && byte1 <= 0x0EF) {
@@ -1833,15 +1798,6 @@ void core_import_programs(int (*progress_report)(const char *)) {
                             cmd += suffix;
                         }
                     }
-                    if (report_label) {
-                        char s[52];
-                        int sl = hp2ascii(s + 1, arg.val.text, arg.length);
-                        s[0] = s[sl + 1] = '"';
-                        s[sl + 2] = 0;
-                        report_label = 0;
-                        if (progress_report(s))
-                            goto done;
-                    }
                     goto store;
                 } else {
                     /* Parameterized HP-42S extension */
@@ -1863,10 +1819,14 @@ void core_import_programs(int (*progress_report)(const char *)) {
                         do_suffix:
                         ind = (suffix & 0x080) != 0;
                         suffix &= 0x7F;
-                        if (!ind && suffix >= 102 && suffix <= 111) {
+                        if (!ind && (cmd == CMD_LBL || cmd == CMD_GTO || cmd == CMD_XEQ
+                                    || cmd >= CMD_KEY1G && cmd <= CMD_KEY9X)
+                                && suffix >= 102 && suffix <= 111) {
                             arg.type = ARGTYPE_LCLBL;
                             arg.val.lclbl = 'A' + (suffix - 102);
-                        } else if (!ind && suffix >= 123) {
+                        } else if (!ind && (cmd == CMD_LBL || cmd == CMD_GTO || cmd == CMD_XEQ
+                                    || cmd >= CMD_KEY1G && cmd <= CMD_KEY9X)
+                                && suffix >= 123) {
                             arg.type = ARGTYPE_LCLBL;
                             arg.val.lclbl = 'a' + (suffix - 123);
                         } else if (suffix >= 112 && suffix <= 116) {
