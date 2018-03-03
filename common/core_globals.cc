@@ -706,7 +706,7 @@ static int array_list_search(void *array);
 static bool persist_vartype(vartype *v);
 static bool unpersist_vartype(vartype **v, bool padded);
 static void update_label_table(int prgm, int4 pc, int inserted);
-static void invalidate_lclbls(int prgm_index);
+static void invalidate_lclbls(int prgm_index, bool force);
 static int pc_line_convert(int4 loc, int loc_is_pc);
 static bool convert_programs();
 #ifdef BCD_MATH
@@ -1397,11 +1397,16 @@ static bool unpersist_globals(int4 ver) {
             goto done;
 #endif
 
-    if (bin_dec_mode_switch())
+    if (bin_dec_mode_switch()) {
         if (!convert_programs()) {
             clear_all_prgms();
             goto done;
         }
+    } else {
+        if (ver < 22)
+            for (i = 0; i < prgms_count; i++)
+                invalidate_lclbls(i, true);
+    }
 
 #ifdef BCD_MATH
     if (state_file_number_format == NUMBER_FORMAT_BCD20_OLD
@@ -1533,7 +1538,7 @@ void clear_prgm_lines(int4 count) {
     }
     labels_count = i;
 
-    invalidate_lclbls(current_prgm);
+    invalidate_lclbls(current_prgm, false);
     clear_all_rtns();
 }
 
@@ -1606,7 +1611,8 @@ int get_command_length(int prgm_index, int4 pc) {
     argtype &= 15;
 
     if ((command == CMD_GTO || command == CMD_XEQ)
-            && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_LCLBL))
+            && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_STK
+                                       || argtype == ARGTYPE_LCLBL))
         pc2 += 4;
     switch (argtype) {
         case ARGTYPE_NUM:
@@ -1646,7 +1652,8 @@ void get_next_command(int4 *pc, int *command, arg_struct *arg, int find_target){
 
     if ((*command == CMD_GTO || *command == CMD_XEQ)
             && (arg->type == ARGTYPE_NUM
-                || arg->type == ARGTYPE_LCLBL)) {
+                || arg->type == ARGTYPE_LCLBL
+                || arg->type == ARGTYPE_STK)) {
         if (find_target) {
             target_pc = 0;
             for (i = 0; i < 4; i++)
@@ -1782,9 +1789,9 @@ static void update_label_table(int prgm, int4 pc, int inserted) {
     }
 }
 
-static void invalidate_lclbls(int prgm_index) {
+static void invalidate_lclbls(int prgm_index, bool force) {
     prgm_struct *prgm = prgms + prgm_index;
-    if (!prgm->lclbl_invalid) {
+    if (force || !prgm->lclbl_invalid) {
         int4 pc2 = 0;
         while (pc2 < prgm->size) {
             int command = prgm->text[pc2];
@@ -1792,7 +1799,8 @@ static void invalidate_lclbls(int prgm_index) {
             command |= (argtype & 240) << 4;
             argtype &= 15;
             if ((command == CMD_GTO || command == CMD_XEQ)
-                    && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_LCLBL)) {
+                    && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_STK
+                                               || argtype == ARGTYPE_LCLBL)) {
                 /* A dest_pc value of -1 signals 'unknown',
                  * -2 means 'nonexistent', and anything else is
                  * the pc where the destination label is found.
@@ -1843,7 +1851,7 @@ void delete_command(int4 pc) {
             prgms[pos] = prgms[pos + 1];
         prgms_count--;
         rebuild_label_table();
-        invalidate_lclbls(current_prgm);
+        invalidate_lclbls(current_prgm, true);
         clear_all_rtns();
         draw_varmenu();
         return;
@@ -1856,7 +1864,7 @@ void delete_command(int4 pc) {
         rebuild_label_table();
     else
         update_label_table(current_prgm, pc, -length);
-    invalidate_lclbls(current_prgm);
+    invalidate_lclbls(current_prgm, false);
     clear_all_rtns();
     draw_varmenu();
 }
@@ -1947,15 +1955,16 @@ void store_command(int4 pc, int command, arg_struct *arg) {
             print_program_line(current_prgm - 1, pc);
 
         rebuild_label_table();
-        invalidate_lclbls(current_prgm);
-        invalidate_lclbls(current_prgm - 1);
+        invalidate_lclbls(current_prgm, true);
+        invalidate_lclbls(current_prgm - 1, true);
         clear_all_rtns();
         draw_varmenu();
         return;
     }
 
     if ((command == CMD_GTO || command == CMD_XEQ)
-            && (arg->type == ARGTYPE_NUM || arg->type == ARGTYPE_LCLBL))
+            && (arg->type == ARGTYPE_NUM || arg->type == ARGTYPE_STK 
+                                         || arg->type == ARGTYPE_LCLBL))
         for (i = 0; i < 4; i++)
             buf[bufptr++] = 255;
     switch (arg->type) {
@@ -2024,7 +2033,7 @@ void store_command(int4 pc, int command, arg_struct *arg) {
         rebuild_label_table();
     else
         update_label_table(current_prgm, pc, bufptr);
-    invalidate_lclbls(current_prgm);
+    invalidate_lclbls(current_prgm, false);
     clear_all_rtns();
     draw_varmenu();
 }
@@ -2979,7 +2988,8 @@ static bool convert_programs() {
             if (command == CMD_END)
                 break;
             if ((command == CMD_GTO || command == CMD_XEQ)
-                    && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_LCLBL)) {
+                    && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_STK
+                                               || argtype == ARGTYPE_LCLBL)) {
                 // Invalidate local label offsets
                 prgm->text[pc++] = 255;
                 prgm->text[pc++] = 255;
@@ -3093,7 +3103,8 @@ static void update_decimal_in_programs() {
             if (command == CMD_END)
                 break;
             if ((command == CMD_GTO || command == CMD_XEQ)
-                    && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_LCLBL)) {
+                    && (argtype == ARGTYPE_NUM || argtype == ARGTYPE_STK
+                                               || argtype == ARGTYPE_LCLBL)) {
                 // Skip local label offsets
                 pc += 4;
             }
