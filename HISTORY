@@ -1,3 +1,19 @@
+2019-02-09: release 2.0.23
+
+* SOLVE now tries harder when secant extrapolation gets stuck due to the secant
+  being excessively steep.
+* 0^0 now returns Invalid Data, not 1, for all combinations of real and complex
+  arguments. The rationale for returning 1 was mathematically questionable, and
+  Invalid Data is what the real HP-42S returns.
+* iPhone version: added basic iPhone X support.
+
+2019-01-26: release 2.0.22c (Android only)
+
+* New Main Menu. This should be compatible with all Android versions, including
+  Amazon Fire HD tablets and other devices that sabotaged the old menu after it
+  started targeting Android 8.
+* Added code to request storage and GPS access when needed.
+
 2019-01-13: release 2.0.22b (Android only)
 
 * Another fix for invisible overflow menu items.
