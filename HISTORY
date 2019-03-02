@@ -1,3 +1,32 @@
+2019-02-24: release 2.0.24
+
+* Made program pasting a bit more lenient: tabs are now treated as spaces, and
+  the following command names are now recognized: x, RCL*, RCLx, RCL/, STOx,
+  X#0?, X#Y?, X<>0?, and X<>Y? (in addition to all the alternate spellings that
+  were recognized previously).
+* iPhone version: added Key Clicks setting in Preferences.
+* Windows and Mac versions: now refuse to export zero programs. (The other
+  versions already did this.) Also tweaked the file selection dialogs a bit.
+* Android version: when running on 4.4 (KitKat) or later, now creates the
+  storage directory, /sdcard/Android/data/com.thomasokken.free42, as soon as it
+  has access. The file selection dialogs are now restricted to this directory
+  and its subdirectories.
+
+2019-02-18: release 2.0.23c (iPhone only)
+
+* The previous release calculated the skin scale incorrectly for certain skins,
+  causing them to be displayed too small. Fixed.
+
+2019-02-17: release 2.0.23b (iPhone only)
+
+* Enabled non-integral scaling for skins, so skins can fill the width of the
+  screen on iPhone X series (X, XR, XS, XS Max) even if they were designed for
+  older models with 3:4 or 9:16 screen aspect ratios.
+
+2019-02-11: release 2.0.23a (iPhone only)
+
+* Replaced iPhone X skin with a more screen-filling one.
+
 2019-02-09: release 2.0.23
 
 * SOLVE now tries harder when secant extrapolation gets stuck due to the secant
