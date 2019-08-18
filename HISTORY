@@ -1,3 +1,9 @@
+????-??-??: release 2.5
+
+* Added state file manager.
+* State files are now in a platform-neutral format.
+* Fixed crash in RTN when a local variable was hiding the indexed matrix.
+
 2019-07-12: release 2.4.2
 
 * Windows version: The new Ctrl-A, Ctrl-I, and Ctrl-T shortcuts (Paper Advance,
