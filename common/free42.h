@@ -20,6 +20,7 @@
 
 
 #ifndef BCD_MATH
+#define _REENTRANT 1
 #include <math.h>
 #endif
 
@@ -29,62 +30,43 @@
 #define uint4 unsigned int
 #define int8 long long
 #define uint8 unsigned long long
+#define uint unsigned int
+
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+/* I have tested big-endian state file compatibility in Fedora 12
+ * running on qemu-system-ppc. I found that I needed to explicitly
+ * set F42_BIG_ENDIAN for it to work; apparently the __BYTE_ORDER__
+ * macro is not defined in such old compilers.
+ * Also see the comment about setting BID_BIG_ENDIAN in
+ * gtk/build-intel-lib.sh.
+ */
+#define F42_BIG_ENDIAN 1
+#endif
 
 
-#if defined(WINDOWS) && !defined(__GNUC__)
+#if defined(WINDOWS) && !defined(BCD_MATH) && !defined(__GNUC__)
 
-        /* MSVC++ 6.0 lacks a few math functions that Free42 needs.
-         * I've defined workarounds in mathfudge.c. NOTE: my versions
-         * of isnan(), finite(), and isinf() are a bit lame -- I *think*
-         * they handle infinities properly, but definitely not NaNs
-         * (although NaNs shouldn't be much of a problem because the Free42
-         * code mostly tries to avoid them, rather than detect them after
-         * the fact).
+        /* MSVC++ 2008 lacks a few math functions that Free42 needs.
+         * I've defined workarounds in mathfudge.c.
          */
 #ifdef __cplusplus
         extern "C" {
 #endif
                 int isnan(double x);
-                int finite(double x);
                 int isinf(double x);
-                void sincos(double x, double *sinx, double *cosx);
+                double atanh(double x);
+                /* These are in the library, but not declared in math.h */
                 double asinh(double x);
                 double acosh(double x);
-                double atanh(double x);
                 double expm1(double x);
                 double log1p(double x);
-#ifdef _WIN32_WCE
-                double hypot(double x, double y);
-#endif
+                double tgamma(double x);
 #ifdef __cplusplus
         }
 #endif
-#else
-
-/* NOTE: In my Linux build, all I have to do is DECLARE sincos(); glibc 2.3.3
- * has it (for C99, I suppose) so I don't have to DEFINE it. On other Unixes
- * (e.g. MacOS X), it may not be provided by the standard libraries; in this
- * case, define the NO_SINCOS symbol, here or in the Makefile.
- * For the Palm build, we don't even need the declaration, since sincos() is
- * provided by MathLib.
- */
-extern "C" void sincos(double x, double *sinx, double *cosx);
-//#define NO_SINCOS 1
 
 #endif
 
-// the iPhone SDK does not define 'finite' so we create a macro wrapper
-#if !defined(BCD_MATH) && defined(IPHONE)
-#define finite(x) isfinite(x)
-#endif
-
-// Android doesn't appear to provide log2
-#if defined(ANDROID)
-extern "C" double log2(double x);
-#endif
-
-
-#define uint unsigned int
 
 /* Magic number and version number for the state file.
  * State file versions correspond to application releases as follows:
@@ -137,16 +119,17 @@ extern "C" double log2(double x);
  * Version 20: 2.0.3  Removed "raw text" option, ext_copan, and ext_bigstack.
  * Version 21: 2.0.7  New random number generator.
  * Version 22: 2.0.17 Fixed bug where local GTO/XEQ targets didn't get cleared
- *                    when and END was deleted, and potentially (though never
+ *                    when an END was deleted, and potentially (though never
  *                    reported) also when an END was inserted. Bumping the
  *                    state version so that older state files get their
  *                    potentially-incorrect jump targets cleared, just in case.
  * Version 23: 2.1    Added "prog" extension: SST^, SST->
- * Version 24: 2.2    Large RTN stack; local variables.
- * Version 25: 2.4    WSIZE, BSIGNED, BWRAP.
+ * Version 24: 2.2    Large RTN stack; local variables
+ * Version 25: 2.4    WSIZE, BSIGNED, BWRAP
+ * Version 26: 2.5    Separate and portable core state file
  */
 #define FREE42_MAGIC 0x466b3432
-#define FREE42_VERSION 25
+#define FREE42_VERSION 26
 
 
 #endif

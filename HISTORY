@@ -1,3 +1,19 @@
+2019-08-28: release 2.5.1
+
+* Fixed bug that caused string elements in real matrices (including the
+  numbered registers) to be written incorrectly in the state file, leading to
+  memory corruption and crashes when the state file was read back in.
+* iPhone version: Now makes sure that the current state shows up in the list in
+  the States view, even if it is opened right after a fresh install or right
+  after upgrading from a version before 2.5.
+
+2019-08-25: release 2.5
+
+* Added state file manager, for loading, saving, and switching between,
+  calculator states. The state files are in a platform-neutral format, so they
+  can be exchanged between Free42 instances running on different devices.
+* Fixed crash in RTN when a local variable was hiding the indexed matrix.
+
 2019-07-12: release 2.4.2
 
 * Windows version: The new Ctrl-A, Ctrl-I, and Ctrl-T shortcuts (Paper Advance,
