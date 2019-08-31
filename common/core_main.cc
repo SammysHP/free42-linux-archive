@@ -727,10 +727,13 @@ static size_t raw_write(const char *buf, size_t size) {
     }
 }
 
-static void raw_close() {
-    if (raw_buf != NULL) {
-        if (ferror(gfile))
-            shell_message("An error occurred during program import.");
+static void raw_close(const char *mode) {
+    if (raw_buf == NULL) {
+	if (ferror(gfile)) {
+	    char msg[50];
+	    sprintf(msg, "An error occurred during program %s.", mode);
+            shell_message(msg);
+	}
         fclose(gfile);
     }
 }
@@ -740,7 +743,7 @@ static void raw_close() {
 #define raw_getc() fgetc(gfile)
 #define raw_ungetc(c) ungetc(c, gfile)
 #define raw_write(buf, size) fwrite(buf, 1, size, gfile)
-#define raw_close() fclose(gfile)
+#define raw_close(dummy) fclose(gfile)
 
 #endif
 
@@ -1167,7 +1170,7 @@ void core_export_programs(int count, const int *indexes, const char *raw_file_na
         export_hp42s(p);
     }
     if (raw_file_name != NULL)
-        raw_close();
+        raw_close("export");
 }
 
 static int hp42tofree42[] = {
@@ -1685,8 +1688,7 @@ void core_import_programs(int num_progs, const char *raw_file_name) {
     int done_flag = 0;
     arg_struct arg;
     int assign = 0;
-    bool first = true;
-    bool pending_end = false;
+    bool pending_end;
 
     if (raw_file_name != NULL) {
 #ifdef IPHONE
@@ -1727,7 +1729,10 @@ void core_import_programs(int num_progs, const char *raw_file_name) {
     if (num_progs > 0) {
         // Loading state file
         goto_dot_dot(true);
-        first = false;
+        pending_end = false;
+    } else {
+        // No initial END needed if last program is empty
+        pending_end = prgms[prgms_count - 1].size > 2;
     }
 
     while (!done_flag) {
@@ -2078,7 +2083,6 @@ void core_import_programs(int num_progs, const char *raw_file_name) {
         store:
         if (pending_end) {
             goto_dot_dot(true);
-            first = false;
             pending_end = false;
         }
         if (cmd == CMD_END) {
@@ -2086,25 +2090,19 @@ void core_import_programs(int num_progs, const char *raw_file_name) {
                 break;
             pending_end = true;
         } else {
-            if (first) {
-                goto_dot_dot(true);
-                first = false;
-            }
             store_command_after(&pc, cmd, &arg);
         }
     }
 
     done:
-    if (!first) {
-        rebuild_label_table();
-        update_catalog();
-    }
+    rebuild_label_table();
+    update_catalog();
 
     flags.f.trace_print = saved_trace;
     flags.f.normal_print = saved_normal;
 
     if (raw_file_name != NULL)
-        raw_close();
+        raw_close("import");
 }
 
 static int real2buf(char *buf, phloat x) {

@@ -1,6 +1,17 @@
+2019-08-31: release 2.5.2
+
+* In the States window, renamed Reload to Revert, and added a confirmation
+  dialog, since that is a potentially destructive action.
+* When programs were imported from raw files, empty progams were sometimes
+  being created unnecessarily. Harmless but slightly annoying. Fixed.
+* Android and iOS versions: Added "share" option for Print-Out view.
+* Android and iOS versions: Added "share" option for programs in raw format.
+* Android and iOS versions: Now import raw files directly from email
+  attachments and web links.
+
 2019-08-28: release 2.5.1
 
-* Fixed bug that caused string elements in real matrices (including the
+* Fixed bug in 2.5 that caused string elements in real matrices (including the
   numbered registers) to be written incorrectly in the state file, leading to
   memory corruption and crashes when the state file was read back in.
 * iPhone version: Now makes sure that the current state shows up in the list in
