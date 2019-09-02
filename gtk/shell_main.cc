@@ -864,9 +864,7 @@ static int read_shell_state(int4 *ver) {
         init_shell_state(-1);
         *ver = version;
         return 1;
-    } else if (version > FREE42_VERSION)
-        /* Unknown state file version */
-        return 0;
+    }
     
     if (fread(&state_size, 1, sizeof(int4), statefile) != sizeof(int4))
         return 0;
@@ -885,7 +883,7 @@ static int read_shell_state(int4 *ver) {
 
 static int write_shell_state() {
     int4 magic = FREE42_MAGIC;
-    int4 version = FREE42_VERSION;
+    int4 version = 27;
     int4 state_size = sizeof(state_type);
     int4 state_version = SHELL_VERSION;
 
@@ -1232,7 +1230,7 @@ static void states_menu_new() {
     char path[FILENAMELEN];
     snprintf(path, FILENAMELEN, "%s/%s.f42", free42dirname, name);
     FILE *f = fopen(path, "w");
-    fprintf(f, "24kF");
+    fprintf(f, FREE42_MAGIC_STR);
     fclose(f);
     free(name);
     gtk_dialog_response(GTK_DIALOG(dlg), 4);
@@ -1587,7 +1585,7 @@ static void statesCB() {
     struct stat st;
     if (stat(buf, &st) != 0) {
         FILE *f = fopen(buf, "w");
-        fwrite("24kF", 1, 4, f);
+        fwrite(FREE42_MAGIC_STR, 1, 4, f);
         fclose(f);
     }
 
@@ -2773,6 +2771,10 @@ static gboolean ann_print_timeout(gpointer cd) {
     ann_print = 0;
     skin_repaint_annunciator(3, ann_print);
     return FALSE;
+}
+
+const char *shell_platform() {
+    return VERSION " " VERSION_PLATFORM;
 }
 
 void shell_annunciators(int updn, int shf, int prt, int run, int g, int rad) {
